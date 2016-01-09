@@ -121,28 +121,22 @@ function ewrs.getSpeed(velocity)
 	return speed -- m/s
 end
 
-function ewrs.main()
-	timer.scheduleFunction(ewrs.main, nil, timer.getTime() + 1) --Schedule first incase of error
-	ewrs.timer = ewrs.timer + 1
-	
-	-- update active players, settings table and radio menus (for new groups) every 5 seconds
-	-- if update interval is not divisible by 5, it could take up to 9 seconds to update. Not an issue
-	if ewrs.timer % 5 == 0 then
-		ewrs.buildActivePlayers()
-		ewrs.buildF10Menu()
-	end
+function ewrs.update()
+	timer.scheduleFunction(ewrs.update, nil, timer.getTime() + 5)
+	ewrs.buildActivePlayers()
+	ewrs.buildF10Menu()
+end
 
-	if ewrs.timer >= ewrs.messageUpdateInterval then
-		ewrs.timer = 0 -- reset timer
-		ewrs.findRadarUnits()
-		if #ewrs.blueEwrUnits > 0 then
-			ewrs.currentlyDetectedRedUnits = ewrs.getRedDetectedUnits()
-		end
-		if #ewrs.redEwrUnits > 0 then
-			ewrs.currentlyDetectedBlueUnits = ewrs.getBlueDetectedUnits()
-		end
-		ewrs.displayMessage()
+function ewrs.startMessageDisplay()
+	timer.scheduleFunction(ewrs.startMessageDisplay, nil, timer.getTime() + ewrs.messageUpdateInterval)
+	ewrs.findRadarUnits()
+	if #ewrs.blueEwrUnits > 0 then
+		ewrs.currentlyDetectedRedUnits = ewrs.getRedDetectedUnits()
 	end
+	if #ewrs.redEwrUnits > 0 then
+		ewrs.currentlyDetectedBlueUnits = ewrs.getBlueDetectedUnits()
+	end
+	ewrs.displayMessage()
 end
 
 function ewrs.displayMessage()
@@ -448,15 +442,10 @@ ewrs.activePlayers = {}
 ewrs.groupSettings = {}
 
 ewrs.builtF10Menus = {}
-ewrs.timer = 0
 
-if ewrs.messageUpdateInterval < 5 then --Just in case they set the message update interval less then 5.
-	ewrs.messageUpdateInterval = 5
-end
-
+ewrs.update()
+timer.scheduleFunction(ewrs.startMessageDisplay, nil, timer.getTime() + ewrs.messageUpdateInterval)
 trigger.action.outText("EWRS by Steggles is now running",15)
-
-ewrs.main()
 
 --[[
 TODO: 
