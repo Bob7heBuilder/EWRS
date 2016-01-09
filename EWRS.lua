@@ -27,7 +27,7 @@ ewrs.FIGHTER = 3
 
 ----SCRIPT OPTIONS----
 
-ewrs.messageUpdateInterval = 30 --How often EWRS will update BRA messages (seconds)**NOT TO BE LESS THEN 5 seconds**
+ewrs.messageUpdateInterval = 30 --How often EWRS will update BRA messages (seconds)
 ewrs.messageDisplayTime = 25 --How long EWRS BRA messages will show for (seconds)
 ewrs.restrictToOneReference = false -- Disables the ability to change the BRA calls from pilot's own aircraft or bullseye. If this is true, set ewrs.defaultReference to the option you want to restrict to.
 ewrs.defaultReference = "self" --The default reference for BRA calls - can be changed via f10 radio menu if ewrs.restrictToOneReference is false (self or bulls)
@@ -131,10 +131,10 @@ function ewrs.startMessageDisplay()
 	timer.scheduleFunction(ewrs.startMessageDisplay, nil, timer.getTime() + ewrs.messageUpdateInterval)
 	ewrs.findRadarUnits()
 	if #ewrs.blueEwrUnits > 0 then
-		ewrs.currentlyDetectedRedUnits = ewrs.getRedDetectedUnits()
+		ewrs.currentlyDetectedRedUnits = ewrs.findDetectedTargets("red")
 	end
 	if #ewrs.redEwrUnits > 0 then
-		ewrs.currentlyDetectedBlueUnits = ewrs.getBlueDetectedUnits()
+		ewrs.currentlyDetectedBlueUnits = ewrs.findDetectedTargets("blue")
 	end
 	ewrs.displayMessage()
 end
@@ -333,38 +333,38 @@ function ewrs.filterUnits(units)
 	return newUnits
 end
 
-function ewrs.getRedDetectedUnits()
+function ewrs.findDetectedTargets(side)
 	local units = {}
-	for n = 1, #ewrs.blueEwrUnits do
-		local ewrUnit = Unit.getByName(ewrs.blueEwrUnits[n])
-		if ewrUnit ~= nil then
-			ewrControl = ewrUnit:getGroup():getController()
-			local detectedTargets = ewrControl:getDetectedTargets(Controller.Detection.RADAR)
-			for k,v in pairs(detectedTargets) do
-				table.insert(units, v["object"])
-			end
-		end -- if ewrUnit ~= nill
-	end --for n = 1, #ewrs.ewrUnits
-	return ewrs.filterUnits(units)
-end
+	local ewrUnits = {}
 
-function ewrs.getBlueDetectedUnits()
-	local units = {}
-	for n = 1, #ewrs.redEwrUnits do
-		local ewrUnit = Unit.getByName(ewrs.redEwrUnits[n])
+	if side == "red" then
+		ewrUnits = ewrs.blueEwrUnits
+	elseif side == "blue" then
+		ewrUnits = ewrs.redEwrUnits
+	end
+
+	for n = 1, #ewrUnits do
+		local ewrUnit = Unit.getByName(ewrUnits[n])
 		if ewrUnit ~= nil then
-			ewrControl = ewrUnit:getGroup():getController()
+			local ewrControl = ewrUnit:getGroup():getController()
 			local detectedTargets = ewrControl:getDetectedTargets(Controller.Detection.RADAR)
-			for k,v in pairs(detectedTargets) do
+			for k,v in pairs (detectedTargets) do
 				table.insert(units, v["object"])
 			end
-		end -- if ewrUnit ~= nill
-	end --for n = 1, #ewrs.ewrUnits
+		end
+	end
 	return ewrs.filterUnits(units)
 end
 
 function ewrs.findRadarUnits()
-	local filter = { "[all][plane]", "[all][vehicle]", "[all][ship]"}
+	local filter = {}
+	if ewrs.enableBlueTeam and ewrs.enableRedTeam then
+		filter = { "[all][plane]", "[all][vehicle]", "[all][ship]"}
+	elseif ewrs.enableBlueTeam then
+		filter = { "[blue][plane]", "[blue][vehicle]", "[blue][ship]"}
+	elseif ewrs.enableRedTeam then
+		filter = { "[red][plane]", "[red][vehicle]", "[red][ship]"}
+	end
 	local all_vecs = mist.makeUnitTable(filter)
 	local redUnits = {}
 	local blueUnits = {}
