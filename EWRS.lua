@@ -1,7 +1,8 @@
 --[[
-	Early Warning Radar Script - 1.0.1 - 11/01/2016
+	Early Warning Radar Script - 1.0.2 - 11/01/2016
 		- Added option to disable messages when no threats are detected
 		- Few minor code changes
+		- 1.0.2 - Added ability to switch messages on/off completely via F10 Radio Menu
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
 	
@@ -148,111 +149,113 @@ function ewrs.displayMessage()
 	end
 	
 	for i = 1, #ewrs.activePlayers do
-		if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
-		
-			local targets = {}
-			if ewrs.activePlayers[i].side == 2 then
-				targets = ewrs.currentlyDetectedRedUnits
-			else
-				targets = ewrs.currentlyDetectedBlueUnits
-			end
-			
-			local referenceX
-			local referenceZ --which is really Y, but Z with DCS vectors
-			local playerName = ewrs.activePlayers[i].player
-			local groupID = ewrs.activePlayers[i].groupID
-			if ewrs.groupSettings[tostring(groupID)].reference == "self" then
-				local self = Unit.getByName(ewrs.activePlayers[i].unitname)
-				local selfpos = self:getPosition()
-				referenceX = selfpos.p.x
-				referenceZ = selfpos.p.z
-			else
-				local bullseye = coalition.getMainRefPoint(ewrs.activePlayers[i].side)
-				referenceX = bullseye.x
-				referenceZ = bullseye.z
-			end
-	
-			local message = {}
-			local tmp = {}
-			
-			--these are used for labeling text output.
-			local altUnits
-			local speedUnits
-			local rangeUnits
-			
-			if ewrs.groupSettings[tostring(groupID)].measurements == "metric" then
-				altUnits = "m"
-				speedUnits = "Km/h"
-				rangeUnits = "Km"
-			else
-				altUnits = "ft"
-				speedUnits = "Knts"
-				rangeUnits = "NM"
-			end
-		
-			for k,v in pairs(targets) do
-						
-				local velocity = v:getVelocity()
-				local bogeypos = v:getPosition()
-				local bogeyType = v:getTypeName()
-				local bearing = ewrs.getBearing(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z)
-				local heading = ewrs.getHeading(velocity)
-				local range = ewrs.getDistance(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z) -- meters
-				local altitude = bogeypos.p.y --meters
-				local speed = ewrs.getSpeed(velocity) --m/s
-			
-				if ewrs.groupSettings[tostring(groupID)].measurements == "metric" then
-					range = range / 1000 --change to KM
-					speed = mist.utils.mpsToKmph(speed)
-					--altitude already in meters
+		if ewrs.groupSettings[tostring(ewrs.activePlayers[i].groupID)].messages then
+			if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
+
+				local targets = {}
+				if ewrs.activePlayers[i].side == 2 then
+					targets = ewrs.currentlyDetectedRedUnits
 				else
-					range = mist.utils.metersToNM(range)
-					speed = mist.utils.mpsToKnots(speed)
-					altitude = mist.utils.metersToFeet(altitude)
+					targets = ewrs.currentlyDetectedBlueUnits
 				end
-				
-				local j = #tmp + 1
-				tmp[j] = {}
-				tmp[j].unitType = bogeyType
-				tmp[j].bearing = bearing
-				tmp[j].range = range
-				tmp[j].altitude = altitude
-				tmp[j].speed = speed
-				tmp[j].heading = heading
-			end
-		
-			table.sort(tmp,sortRanges)
-		
-			if #targets >= 1 then
-				--Display table
-				table.insert(message, "\n")
-				table.insert(message, "EWRS Picture Report for: " .. playerName .. " -- Reference: " .. ewrs.groupSettings[tostring(groupID)].reference)
-				table.insert(message, "\n\n")
-				table.insert(message, string.format( "%-16s", "TYPE"))
-				table.insert(message, string.format( "%-12s", "BRG"))
-				table.insert(message, string.format( "%-12s", "RNG"))
-				table.insert(message, string.format( "%-21s", "ALT"))
-				table.insert(message, string.format( "%-15s", "SPD"))
-				table.insert(message, string.format( "%-3s", "HDG"))
-				table.insert(message, "\n")
-		
-				for k = 1, #tmp do
+
+				local referenceX
+				local referenceZ --which is really Y, but Z with DCS vectors
+				local playerName = ewrs.activePlayers[i].player
+				local groupID = ewrs.activePlayers[i].groupID
+				if ewrs.groupSettings[tostring(groupID)].reference == "self" then
+					local self = Unit.getByName(ewrs.activePlayers[i].unitname)
+					local selfpos = self:getPosition()
+					referenceX = selfpos.p.x
+					referenceZ = selfpos.p.z
+				else
+					local bullseye = coalition.getMainRefPoint(ewrs.activePlayers[i].side)
+					referenceX = bullseye.x
+					referenceZ = bullseye.z
+				end
+
+				local message = {}
+				local tmp = {}
+
+				--these are used for labeling text output.
+				local altUnits
+				local speedUnits
+				local rangeUnits
+
+				if ewrs.groupSettings[tostring(groupID)].measurements == "metric" then
+					altUnits = "m"
+					speedUnits = "Km/h"
+					rangeUnits = "Km"
+				else
+					altUnits = "ft"
+					speedUnits = "Knts"
+					rangeUnits = "NM"
+				end
+
+				for k,v in pairs(targets) do
+
+					local velocity = v:getVelocity()
+					local bogeypos = v:getPosition()
+					local bogeyType = v:getTypeName()
+					local bearing = ewrs.getBearing(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z)
+					local heading = ewrs.getHeading(velocity)
+					local range = ewrs.getDistance(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z) -- meters
+					local altitude = bogeypos.p.y --meters
+					local speed = ewrs.getSpeed(velocity) --m/s
+
+					if ewrs.groupSettings[tostring(groupID)].measurements == "metric" then
+						range = range / 1000 --change to KM
+						speed = mist.utils.mpsToKmph(speed)
+						--altitude already in meters
+					else
+						range = mist.utils.metersToNM(range)
+						speed = mist.utils.mpsToKnots(speed)
+						altitude = mist.utils.metersToFeet(altitude)
+					end
+
+					local j = #tmp + 1
+					tmp[j] = {}
+					tmp[j].unitType = bogeyType
+					tmp[j].bearing = bearing
+					tmp[j].range = range
+					tmp[j].altitude = altitude
+					tmp[j].speed = speed
+					tmp[j].heading = heading
+				end
+
+				table.sort(tmp,sortRanges)
+
+				if #targets >= 1 then
+					--Display table
 					table.insert(message, "\n")
-					table.insert(message, string.format( "%-16s", tmp[k].unitType))
-					table.insert(message, string.format( "%03d", tmp[k].bearing))
-					table.insert(message, string.format( "%8.1f %s", tmp[k].range, rangeUnits))
-					table.insert(message, string.format( "%9d %s", tmp[k].altitude, altUnits))
-					table.insert(message, string.format( "%9d %s", tmp[k].speed, speedUnits))
-					table.insert(message, string.format( "         %03d", tmp[k].heading))
+					table.insert(message, "EWRS Picture Report for: " .. playerName .. " -- Reference: " .. ewrs.groupSettings[tostring(groupID)].reference)
+					table.insert(message, "\n\n")
+					table.insert(message, string.format( "%-16s", "TYPE"))
+					table.insert(message, string.format( "%-12s", "BRG"))
+					table.insert(message, string.format( "%-12s", "RNG"))
+					table.insert(message, string.format( "%-21s", "ALT"))
+					table.insert(message, string.format( "%-15s", "SPD"))
+					table.insert(message, string.format( "%-3s", "HDG"))
 					table.insert(message, "\n")
-				end
-				trigger.action.outTextForGroup(groupID, table.concat(message), ewrs.messageDisplayTime)
-			else -- no targets detected
-				if not ewrs.disableMessageWhenNoThreats then
-					trigger.action.outTextForGroup(groupID, "\nEWRS Picture Report for: " .. playerName .. "\n\nNo targets detected", ewrs.messageDisplayTime)
-				end
-			end -- if #targets >= 1 then
-		end -- if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
+
+					for k = 1, #tmp do
+						table.insert(message, "\n")
+						table.insert(message, string.format( "%-16s", tmp[k].unitType))
+						table.insert(message, string.format( "%03d", tmp[k].bearing))
+						table.insert(message, string.format( "%8.1f %s", tmp[k].range, rangeUnits))
+						table.insert(message, string.format( "%9d %s", tmp[k].altitude, altUnits))
+						table.insert(message, string.format( "%9d %s", tmp[k].speed, speedUnits))
+						table.insert(message, string.format( "         %03d", tmp[k].heading))
+						table.insert(message, "\n")
+					end
+					trigger.action.outTextForGroup(groupID, table.concat(message), ewrs.messageDisplayTime)
+				else -- no targets detected
+					if not ewrs.disableMessageWhenNoThreats then
+						trigger.action.outTextForGroup(groupID, "\nEWRS Picture Report for: " .. playerName .. "\n\nNo targets detected", ewrs.messageDisplayTime)
+					end
+				end -- if #targets >= 1 then
+			end -- if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
+		end -- if ewrs.groupSettings[tostring(ewrs.activePlayers[i].groupID)].messages then
 	end -- for i = 1, #ewrs.activePlayers do
 end
 
@@ -401,6 +404,7 @@ function ewrs.addGroupSettings(groupID)
 	ewrs.groupSettings[groupID] = {}
 	ewrs.groupSettings[groupID].reference = ewrs.defaultReference
 	ewrs.groupSettings[groupID].measurements = ewrs.defaultMeasurements
+	ewrs.groupSettings[groupID].messages = true
 end
 
 function ewrs.setGroupReference(args)
@@ -415,6 +419,13 @@ function ewrs.setGroupMeasurements(args)
 	trigger.action.outTextForGroup(groupID,"Measurement units changed to "..args[2],ewrs.messageDisplayTime)
 end
 
+function ewrs.setGroupMessages(args)
+	local groupID = args[1]
+	local onOff
+	if args[2] then onOff = "on" else onOff = "off" end
+	ewrs.groupSettings[tostring(groupID)].messages = args[2]
+	trigger.action.outTextForGroup(groupID,"Picture reports for group turned "..onOff,ewrs.messageDisplayTime)
+end
 
 function ewrs.buildF10Menu()
 	for i = 1, #ewrs.activePlayers do
@@ -431,6 +442,11 @@ function ewrs.buildF10Menu()
 			local measurementsSetPath = missionCommands.addSubMenuForGroup(groupID,"Set GROUP's measurement units",rootPath)
 			missionCommands.addCommandForGroup(groupID, "Set to Imperial (feet, knts)",measurementsSetPath,ewrs.setGroupMeasurements,{groupID, "imperial"})
 			missionCommands.addCommandForGroup(groupID, "Set to Metric (meters, km/h)",measurementsSetPath,ewrs.setGroupMeasurements,{groupID, "metric"})
+
+			local messageOnOffPath = missionCommands.addSubMenuForGroup(groupID, "Turn Picture Report On/Off",rootPath)
+			missionCommands.addCommandForGroup(groupID, "Message ON", messageOnOffPath, ewrs.setGroupMessages, {groupID, true})
+			missionCommands.addCommandForGroup(groupID, "Message OFF", messageOnOffPath, ewrs.setGroupMessages, {groupID, false})
+
 			ewrs.builtF10Menus[stringGroupID] = true
 		end
 	end
