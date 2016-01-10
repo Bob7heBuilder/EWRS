@@ -1,5 +1,7 @@
 --[[
-	Early Warning Radar Script - 1.0 - 08/01/2016
+	Early Warning Radar Script - 1.0.1 - 11/01/2016
+		- Added option to disable messages when no threats are detected
+		- Few minor code changes
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
 	
@@ -35,6 +37,7 @@ ewrs.defaultMeasurements = "imperial" --Default measurement units - can be chang
 ewrs.disableFightersBRA = false -- disables BRA messages to fighters when true
 ewrs.enableRedTeam = true -- enables / disables EWRS for the red team
 ewrs.enableBlueTeam = true -- enables / disables EWRS for the blue team
+ewrs.disableMessageWhenNoThreats = true -- disables message when no threats are detected - Thanks Rivvern
 
 --[[
 Units with radar to use as part of the EWRS radar network
@@ -245,7 +248,9 @@ function ewrs.displayMessage()
 				end
 				trigger.action.outTextForGroup(groupID, table.concat(message), ewrs.messageDisplayTime)
 			else -- no targets detected
-				trigger.action.outTextForGroup(groupID, "\nEWRS Picture Report for: " .. playerName .. "\n\nNo targets detected", ewrs.messageDisplayTime)
+				if not ewrs.disableMessageWhenNoThreats then
+					trigger.action.outTextForGroup(groupID, "\nEWRS Picture Report for: " .. playerName .. "\n\nNo targets detected", ewrs.messageDisplayTime)
+				end
 			end -- if #targets >= 1 then
 		end -- if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
 	end -- for i = 1, #ewrs.activePlayers do
