@@ -1,8 +1,11 @@
 --[[
-	Early Warning Radar Script - 1.0.2 - 11/01/2016
+	Early Warning Radar Script - 1.1 - 12/01/2016
 		- Added option to disable messages when no threats are detected
 		- Few minor code changes
 		- 1.0.2 - Added ability to switch messages on/off completely via F10 Radio Menu
+		- 1.1 - Improved Detection Logic Implemented
+			- Uses extra radar information to know if type and distance is known to the target
+			- Can be switched on and off in the script settings
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
 	
@@ -39,6 +42,7 @@ ewrs.disableFightersBRA = false -- disables BRA messages to fighters when true
 ewrs.enableRedTeam = true -- enables / disables EWRS for the red team
 ewrs.enableBlueTeam = true -- enables / disables EWRS for the blue team
 ewrs.disableMessageWhenNoThreats = true -- disables message when no threats are detected - Thanks Rivvern
+ewrs.useImprovedDetectionLogic = true --this makes the messages more realistic. If the radar doesn't know the type or distance to the detected threat, it will be reflected in the picture report / BRA message
 
 --[[
 Units with radar to use as part of the EWRS radar network
@@ -151,7 +155,7 @@ function ewrs.displayMessage()
 	for i = 1, #ewrs.activePlayers do
 		if ewrs.groupSettings[tostring(ewrs.activePlayers[i].groupID)].messages then
 			if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
-
+				local notAvailable = 999999
 				local targets = {}
 				if ewrs.activePlayers[i].side == 2 then
 					targets = ewrs.currentlyDetectedRedUnits
@@ -193,10 +197,18 @@ function ewrs.displayMessage()
 				end
 
 				for k,v in pairs(targets) do
-
-					local velocity = v:getVelocity()
-					local bogeypos = v:getPosition()
-					local bogeyType = v:getTypeName()
+					local velocity = v["object"]:getVelocity()
+					local bogeypos = v["object"]:getPosition()
+					local bogeyType = nil
+					if ewrs.useImprovedDetectionLogic then
+						if v["type"] then
+							bogeyType = v["object"]:getTypeName()
+						else
+							bogeyType = "  ???  "
+						end
+					else
+						bogeyType = v["object"]:getTypeName()
+					end
 					local bearing = ewrs.getBearing(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z)
 					local heading = ewrs.getHeading(velocity)
 					local range = ewrs.getDistance(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z) -- meters
@@ -211,6 +223,12 @@ function ewrs.displayMessage()
 						range = mist.utils.metersToNM(range)
 						speed = mist.utils.mpsToKnots(speed)
 						altitude = mist.utils.metersToFeet(altitude)
+					end
+
+					if ewrs.useImprovedDetectionLogic then
+						if not v["distance"] then
+							range = notAvailable
+						end
 					end
 
 					local j = #tmp + 1
@@ -241,11 +259,19 @@ function ewrs.displayMessage()
 					for k = 1, #tmp do
 						table.insert(message, "\n")
 						table.insert(message, string.format( "%-16s", tmp[k].unitType))
-						table.insert(message, string.format( "%03d", tmp[k].bearing))
-						table.insert(message, string.format( "%8.1f %s", tmp[k].range, rangeUnits))
-						table.insert(message, string.format( "%9d %s", tmp[k].altitude, altUnits))
-						table.insert(message, string.format( "%9d %s", tmp[k].speed, speedUnits))
-						table.insert(message, string.format( "         %03d", tmp[k].heading))
+						if tmp[k].range == notAvailable then
+							table.insert(message, string.format( "%-12s", " "))
+							table.insert(message, string.format( "%-12s", "POSITION"))
+							table.insert(message, string.format( "%-21s", " "))
+							table.insert(message, string.format( "%-15s", "UNKNOWN"))
+							table.insert(message, string.format( "%-3s", " "))
+						else
+							table.insert(message, string.format( "%03d", tmp[k].bearing))
+							table.insert(message, string.format( "%8.1f %s", tmp[k].range, rangeUnits))
+							table.insert(message, string.format( "%9d %s", tmp[k].altitude, altUnits))
+							table.insert(message, string.format( "%9d %s", tmp[k].speed, speedUnits))
+							table.insert(message, string.format( "         %03d", tmp[k].heading))
+						end
 						table.insert(message, "\n")
 					end
 					trigger.action.outTextForGroup(groupID, table.concat(message), ewrs.messageDisplayTime)
@@ -326,11 +352,11 @@ function ewrs.filterUnits(units)
 	local newUnits = {}
 	for k,v in pairs(units) do
 		local valid = true
-		local category = v:getCategory()
+		local category = v["object"]:getCategory()
 		if category ~= Object.Category.UNIT then valid = false end
 		if valid then
 			for nk,nv in pairs (newUnits) do --recursive loop, can't see a way around this
-				if v:getName() == nv:getName() then valid = false end
+				if v["object"]:getName() == nv["object"]:getName() then valid = false end
 			end
 		end
 		
@@ -357,7 +383,7 @@ function ewrs.findDetectedTargets(side)
 			local ewrControl = ewrUnit:getGroup():getController()
 			local detectedTargets = ewrControl:getDetectedTargets(Controller.Detection.RADAR)
 			for k,v in pairs (detectedTargets) do
-				table.insert(units, v["object"])
+				table.insert(units, v)
 			end
 		end
 	end
@@ -470,9 +496,5 @@ trigger.action.outText("EWRS by Steggles is now running",15)
 
 --[[
 TODO: 
-	- Improved detection logic
-		- Use detectedTarget.type to see if unit type is known
-		- Use detectedTarget.distance to see if distance is known
-		- Implementing these will make ECM effective too - Not sure how to implement distance if its not known. If distance isn't known, BRA is impossible to calculate
-			Just have threat detected in message and dont give any BRA info?? Leave it out completely? Is there a formula to be able to give bearing between xxx-xxx ?? 
+
 ]]
