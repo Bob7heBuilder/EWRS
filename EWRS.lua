@@ -107,7 +107,7 @@ function ewrs.getDistance(obj1PosX, obj1PosZ, obj2PosX, obj2PosZ)
 end
 
 function ewrs.getBearing(obj1PosX, obj1PosZ, obj2PosX, obj2PosZ)
-    bearing = math.atan2(obj2PosZ - obj1PosZ, obj2PosX - obj1PosX)
+    local bearing = math.atan2(obj2PosZ - obj1PosZ, obj2PosX - obj1PosX)
     if bearing < 0 then
         bearing = bearing + 2 * math.pi
     end
@@ -286,53 +286,51 @@ function ewrs.displayMessage()
 end
 
 function ewrs.buildActivePlayers()
-	local redFixedWing = coalition.getGroups(1,Group.Category.AIRPLANE)
-	local redRotorWing = coalition.getGroups(1,Group.Category.HELICOPTER)
-	local blueFixedWing = coalition.getGroups(2,Group.Category.AIRPLANE)
-	local blueRotorWing = coalition.getGroups(2,Group.Category.HELICOPTER)
-	local groups = {}
+	local status, result = pcall(function()
+		local filter = { "[all][plane]","[all][helicopter]"}
+		local all_vecs = mist.makeUnitTable(filter)
+		ewrs.activePlayers = {}
+		for i = 1, #all_vecs do
+			local vec = Unit.getByName(all_vecs[i])
+			if vec ~= nil and Unit.isActive(vec) then
+				playerName = Unit.getPlayerName(vec)
+				local groupID = ewrs.getGroupId(vec)
+				if playerName ~= nil then
+					unitCategory = ewrs.acCategories[Unit.getTypeName(vec)]
+					if ewrs.disableFightersBRA and unitCategory == ewrs.FIGHTER then
+						--DONT DO ANYTHING
+					else
+						local group = Unit.getGroup(vec)
+						if ewrs.enableBlueTeam and Unit.getCoalition(vec) == 2 then
+							ewrs.addPlayer(playerName, groupID, vec)
+						elseif ewrs.enableRedTeam and Unit.getCoalition(vec) == 1 then
+							ewrs.addPlayer(playerName, groupID, vec)
+						end
+					end
+				end
+			end
+		end
+	end) -- pcall
 	
-	for i = 1, #redFixedWing do
-		table.insert(groups, redFixedWing[i])
+	if not status then
+		env.error(string.format("EWRS buildActivePlayers Error: %s", result))
 	end
-	for i = 1, #redRotorWing do
-		table.insert(groups, redRotorWing[i])
-	end
-	for i = 1, #blueFixedWing do
-		table.insert(groups, blueFixedWing[i])
-	end
-	for i = 1, #blueRotorWing do
-		table.insert(groups, blueRotorWing[i])
-	end
-	
-	ewrs.activePlayers = {}
-	for i = 1, #groups do
-		local group = groups[i]
-		if group ~= nil then
-			local units = group:getUnits()
-			for u = 1, #units do
-				local unit = units[u]
-				if unit ~= nil and unit:isActive() then
-					playerName = unit:getPlayerName()
-					if playerName ~= nil then
-						unitCategory = ewrs.acCategories[unit:getTypeName()]
-						if ewrs.disableFightersBRA and unitCategory == ewrs.FIGHTER then
-							--DONT DO ANYTHING
-						else
-							if ewrs.enableBlueTeam and unit:getCoalition() == 2 then
-								ewrs.addPlayer(playerName, group:getID(), unit)
-							elseif ewrs.enableRedTeam and unit:getCoalition() == 1 then
-								ewrs.addPlayer(playerName, group:getID(), unit)
-							end
-						end --if ewrs.disableFightersBRA and unitCategory == ewrs.FIGHTER then
-					end --if playerName ~= nil
-				end --if unit~= nil
-			end --for u = 1, #units
-		end --if group ~= nil
-	end -- for i = 1, #groups
+end
+
+--THANK YOU ciribob http://forums.eagle.ru/showpost.php?p=2499638&postcount=5
+--And Stonehouse for pointing me there
+function ewrs.getGroupId(_unit) --Temp fix for client groups not being accessable
+
+    local _unitDB =  mist.DBs.unitsById[tonumber(_unit:getID())]
+    if _unitDB ~= nil and _unitDB.groupId then
+        return _unitDB.groupId
+    end
+
+    return nil
 end
 
 function ewrs.addPlayer(playerName, groupID, unit )
+local status, result = pcall(function()
 	local i = #ewrs.activePlayers + 1
 	ewrs.activePlayers[i] = {}
 	ewrs.activePlayers[i].player = playerName
@@ -344,6 +342,10 @@ function ewrs.addPlayer(playerName, groupID, unit )
 	if ewrs.groupSettings[tostring(groupID)] == nil then
 		ewrs.addGroupSettings(tostring(groupID))
 	end
+end)
+if not status then
+	env.error(string.format("EWRS addPlayer Error: %s", result))
+end
 end
 
 -- filters units so ones detected by multiple radar sites still only get listed once
@@ -454,6 +456,7 @@ function ewrs.setGroupMessages(args)
 end
 
 function ewrs.buildF10Menu()
+local status, result = pcall(function()
 	for i = 1, #ewrs.activePlayers do
 		local groupID = ewrs.activePlayers[i].groupID
 		local stringGroupID = tostring(groupID)
@@ -476,6 +479,11 @@ function ewrs.buildF10Menu()
 			ewrs.builtF10Menus[stringGroupID] = true
 		end
 	end
+end)
+	
+if not status then
+	env.error(string.format("EWRS buildF10Menu Error: %s", result))
+end
 end
 
 --SCRIPT INIT
@@ -493,6 +501,7 @@ ewrs.builtF10Menus = {}
 ewrs.update()
 timer.scheduleFunction(ewrs.startMessageDisplay, nil, timer.getTime() + ewrs.messageUpdateInterval)
 trigger.action.outText("EWRS by Steggles is now running",15)
+env.info("EWRS Running")
 
 --[[
 TODO: 
