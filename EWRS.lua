@@ -1,11 +1,11 @@
 --[[
-	Early Warning Radar Script - 1.1 - 12/01/2016
-		- Added option to disable messages when no threats are detected
-		- Few minor code changes
-		- 1.0.2 - Added ability to switch messages on/off completely via F10 Radio Menu
+	Early Warning Radar Script - 1.2 - 12/01/2016
 		- 1.1 - Improved Detection Logic Implemented
 			- Uses extra radar information to know if type and distance is known to the target
 			- Can be switched on and off in the script settings
+		- 1.2 - Fixed bug where clients in MP would break the script
+			- Added some logging events
+			- Added F-86F Sabre to aircraft list - Thanks Zaz0
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
 	
@@ -80,6 +80,7 @@ ewrs.acCategories = { --Have I left anything out? Please let me know if I have
 [ "C-101EB"        ] = ewrs.ATTACK  ,
 [ "F-15C"          ] = ewrs.FIGHTER ,
 [ "FW-190D9"       ] = ewrs.ATTACK  ,
+[ "F-86F Sabre"	   ] = ewrs.FIGHTER ,
 [ "Hawk"           ] = ewrs.ATTACK  ,
 [ "Ka-50"          ] = ewrs.HELO    ,
 [ "L-39C"		   ] = ewrs.ATTACK	,
@@ -330,22 +331,22 @@ function ewrs.getGroupId(_unit) --Temp fix for client groups not being accessabl
 end
 
 function ewrs.addPlayer(playerName, groupID, unit )
-local status, result = pcall(function()
-	local i = #ewrs.activePlayers + 1
-	ewrs.activePlayers[i] = {}
-	ewrs.activePlayers[i].player = playerName
-	ewrs.activePlayers[i].groupID = groupID
-	ewrs.activePlayers[i].unitname = unit:getName()
-	ewrs.activePlayers[i].side = unit:getCoalition() 
+	local status, result = pcall(function()
+		local i = #ewrs.activePlayers + 1
+		ewrs.activePlayers[i] = {}
+		ewrs.activePlayers[i].player = playerName
+		ewrs.activePlayers[i].groupID = groupID
+		ewrs.activePlayers[i].unitname = unit:getName()
+		ewrs.activePlayers[i].side = unit:getCoalition() 
 	
-	-- add default settings to settings table if it hasn't been done yet
-	if ewrs.groupSettings[tostring(groupID)] == nil then
-		ewrs.addGroupSettings(tostring(groupID))
+		-- add default settings to settings table if it hasn't been done yet
+		if ewrs.groupSettings[tostring(groupID)] == nil then
+			ewrs.addGroupSettings(tostring(groupID))
+		end
+	end)
+	if not status then
+		env.error(string.format("EWRS addPlayer Error: %s", result))
 	end
-end)
-if not status then
-	env.error(string.format("EWRS addPlayer Error: %s", result))
-end
 end
 
 -- filters units so ones detected by multiple radar sites still only get listed once
@@ -456,34 +457,34 @@ function ewrs.setGroupMessages(args)
 end
 
 function ewrs.buildF10Menu()
-local status, result = pcall(function()
-	for i = 1, #ewrs.activePlayers do
-		local groupID = ewrs.activePlayers[i].groupID
-		local stringGroupID = tostring(groupID)
-		if ewrs.builtF10Menus[stringGroupID] == nil then
-			local rootPath = missionCommands.addSubMenuForGroup(groupID, "EWRS")
-			if not ewrs.restrictToOneReference then
-				local referenceSetPath = missionCommands.addSubMenuForGroup(groupID,"Set GROUP's reference point", rootPath)
-				missionCommands.addCommandForGroup(groupID, "Set to Bullseye",referenceSetPath,ewrs.setGroupReference,{groupID, "bulls"})
-				missionCommands.addCommandForGroup(groupID, "Set to Self",referenceSetPath,ewrs.setGroupReference,{groupID, "self"})
-			end
+	local status, result = pcall(function()
+		for i = 1, #ewrs.activePlayers do
+			local groupID = ewrs.activePlayers[i].groupID
+			local stringGroupID = tostring(groupID)
+			if ewrs.builtF10Menus[stringGroupID] == nil then
+				local rootPath = missionCommands.addSubMenuForGroup(groupID, "EWRS")
+				if not ewrs.restrictToOneReference then
+					local referenceSetPath = missionCommands.addSubMenuForGroup(groupID,"Set GROUP's reference point", rootPath)
+					missionCommands.addCommandForGroup(groupID, "Set to Bullseye",referenceSetPath,ewrs.setGroupReference,{groupID, "bulls"})
+					missionCommands.addCommandForGroup(groupID, "Set to Self",referenceSetPath,ewrs.setGroupReference,{groupID, "self"})
+				end
 			
-			local measurementsSetPath = missionCommands.addSubMenuForGroup(groupID,"Set GROUP's measurement units",rootPath)
-			missionCommands.addCommandForGroup(groupID, "Set to Imperial (feet, knts)",measurementsSetPath,ewrs.setGroupMeasurements,{groupID, "imperial"})
-			missionCommands.addCommandForGroup(groupID, "Set to Metric (meters, km/h)",measurementsSetPath,ewrs.setGroupMeasurements,{groupID, "metric"})
+				local measurementsSetPath = missionCommands.addSubMenuForGroup(groupID,"Set GROUP's measurement units",rootPath)
+				missionCommands.addCommandForGroup(groupID, "Set to Imperial (feet, knts)",measurementsSetPath,ewrs.setGroupMeasurements,{groupID, "imperial"})
+				missionCommands.addCommandForGroup(groupID, "Set to Metric (meters, km/h)",measurementsSetPath,ewrs.setGroupMeasurements,{groupID, "metric"})
 
-			local messageOnOffPath = missionCommands.addSubMenuForGroup(groupID, "Turn Picture Report On/Off",rootPath)
-			missionCommands.addCommandForGroup(groupID, "Message ON", messageOnOffPath, ewrs.setGroupMessages, {groupID, true})
-			missionCommands.addCommandForGroup(groupID, "Message OFF", messageOnOffPath, ewrs.setGroupMessages, {groupID, false})
+				local messageOnOffPath = missionCommands.addSubMenuForGroup(groupID, "Turn Picture Report On/Off",rootPath)
+				missionCommands.addCommandForGroup(groupID, "Message ON", messageOnOffPath, ewrs.setGroupMessages, {groupID, true})
+				missionCommands.addCommandForGroup(groupID, "Message OFF", messageOnOffPath, ewrs.setGroupMessages, {groupID, false})
 
-			ewrs.builtF10Menus[stringGroupID] = true
+				ewrs.builtF10Menus[stringGroupID] = true
+			end
 		end
-	end
-end)
+	end)
 	
-if not status then
-	env.error(string.format("EWRS buildF10Menu Error: %s", result))
-end
+	if not status then
+		env.error(string.format("EWRS buildF10Menu Error: %s", result))
+	end
 end
 
 --SCRIPT INIT
