@@ -89,7 +89,7 @@ ewrs.acCategories = { --Have I left anything out? Please let me know if I have
 [ "MiG-21Bis"      ] = ewrs.ATTACK  ,
 [ "MiG-29A"		   ] = ewrs.FIGHTER	,
 [ "MiG-29S"		   ] = ewrs.FIGHTER	,
-[ "M2000C" 		   ] = ewrs.FIGHTER	,
+[ "M-2000C"		   ] = ewrs.FIGHTER	,
 [ "P-51D"          ] = ewrs.ATTACK	,
 [ "Su-25"          ] = ewrs.ATTACK	,
 [ "Su-25T"         ] = ewrs.ATTACK	,
@@ -355,8 +355,9 @@ function ewrs.filterUnits(units)
 	local newUnits = {}
 	for k,v in pairs(units) do
 		local valid = true
-		local category = v["object"]:getCategory()
-		if category ~= Object.Category.UNIT then valid = false end
+		--local category = v["object"]:getCategory()
+		--if category ~= Object.Category.UNIT then valid = false end
+		if ewrs.validThreats[v["object"]:getTypeName()] == nil then valid = false end
 		if valid then
 			for nk,nv in pairs (newUnits) do --recursive loop, can't see a way around this
 				if v["object"]:getName() == nv["object"]:getName() then valid = false end
@@ -486,6 +487,98 @@ function ewrs.buildF10Menu()
 		env.error(string.format("EWRS buildF10Menu Error: %s", result))
 	end
 end
+
+--temp fix for ground units being detected by radar
+ewrs.validThreats = {
+["A-10A"] = true,
+["A-10C"] = true,
+["A-50"] = true,
+["AH-1W"] = true,
+["AH-64A"] = true,
+["AH-64D"] = true,
+["An-26B"] = true,
+["An-30M"] = true,
+["B-1B"] = true,
+["B-52H"] = true,
+["Bf-109K-4"] = true,
+["C-101EB"] = true,
+["C-130"] = true,
+["C-17A"] = true,
+["CH-47D"] = true,
+["CH-53E"] = true,
+["E-2C"] = true,
+["E-3A"] = true,
+["F-111F"] = true,
+["F-117A"] = true,
+["F-14A"] = true,
+["F-15C"] = true,
+["F-15E"] = true,
+["F-16A"] = true,
+["F-16A MLU"] = true,
+["F-16C bl.50"] = true,
+["F-16C bl.52d"] = true,
+["F-4E"] = true,
+["F-5E"] = true,
+["F-5E-3"] = true,
+["F-86F Sabre"] = true,
+["F/A-18A"] = true,
+["F/A-18C"] = true,
+["FW-190D9"] = true,
+["Hawk"] = true,
+["IL-76MD"] = true,
+["IL-78M"] = true,
+["KC-135"] = true,
+["Ka-27"] = true,
+["Ka-50"] = true,
+["Ka-52"] = true,
+["L-39C"] = true,
+["L-39ZA"] = true,
+["M-2000C"] = true,
+["MQ-9 Reaper"] = true,
+["Mi-24V"] = true,
+["Mi-26"] = true,
+["Mi-28N"] = true,
+["Mi-8MT"] = true,
+["MiG-15bis"] = true,
+["MiG-21Bis"] = true,
+["MiG-23MLD"] = true,
+["MiG-25PD"] = true,
+["MiG-25RBT"] = true,
+["MiG-27K"] = true,
+["MiG-29A"] = true,
+["MiG-29G"] = true,
+["MiG-29K"] = true,
+["MiG-29S"] = true,
+["MiG-31"] = true,
+["Mirage 2000-5"] = true,
+["OH-58D"] = true,
+["P-51D"] = true,
+["RQ-1A Predator"] = true,
+["S-3B"] = true,
+["S-3B Tanker"] = true,
+["SH-3W"] = true,
+["SH-60B"] = true,
+["Su-17M4"] = true,
+["Su-24M"] = true,
+["Su-24MR"] = true,
+["Su-25"] = true,
+["Su-25T"] = true,
+["Su-25TM"] = true,
+["Su-27"] = true,
+["Su-30"] = true,
+["Su-33"] = true,
+["Su-34"] = true,
+["TF-51D"] = true,
+["Tornado GR4"] = true,
+["Tornado IDS"] = true,
+["Tu-142"] = true,
+["Tu-160"] = true,
+["Tu-22M3"] = true,
+["Tu-95MS"] = true,
+["UH-1H"] = true,
+["UH-60A"] = true,
+["Yak-40"] = true,
+}
 
 --SCRIPT INIT
 ewrs.currentlyDetectedRedUnits = {}
