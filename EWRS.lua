@@ -148,142 +148,159 @@ function ewrs.startMessageDisplay()
 	ewrs.displayMessage()
 end
 
-function ewrs.displayMessage()
+function ewrs.buildThreatTable(activePlayer)
 	local function sortRanges(v1,v2)
 		return v1.range < v2.range
 	end
+
+	local targets = {}
+	if activePlayer.side == 2 then
+		targets = ewrs.currentlyDetectedRedUnits
+	else
+		targets = ewrs.currentlyDetectedBlueUnits
+	end
 	
+	local referenceX
+	local referenceZ
+	if ewrs.groupSettings[tostring(activePlayer.groupID)].reference == "self" then
+		local _self = Unit.getByName(activePlayer.unitname)
+		local selfpos = _self:getPosition()
+		referenceX = selfpos.p.x
+		referenceZ = selfpos.p.z
+	else
+		local bullseye = coalition.getMainRefPoint(activePlayer.side)
+		referenceX = bullseye.x
+		referenceZ = bullseye.z
+	end
+	
+	local threatTable = {}
+	
+	for k,v in pairs(targets) do
+		local velocity = v["object"]:getVelocity()
+		local bogeypos = v["object"]:getPosition()
+		local bogeyType = nil
+		if ewrs.useImprovedDetectionLogic then
+			if v["type"] then
+				bogeyType = v["object"]:getTypeName()
+			else
+				bogeyType = "  ???  "
+			end
+		else
+			bogeyType = v["object"]:getTypeName()
+		end
+		
+		local bearing = ewrs.getBearing(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z)
+		local heading = ewrs.getHeading(velocity)
+		local range = ewrs.getDistance(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z) -- meters
+		local altitude = bogeypos.p.y --meters
+		local speed = ewrs.getSpeed(velocity) --m/s
+
+		if ewrs.groupSettings[tostring(activePlayer.groupID)].measurements == "metric" then
+			range = range / 1000 --change to KM
+			speed = mist.utils.mpsToKmph(speed)
+			--altitude already in meters
+		else
+			range = mist.utils.metersToNM(range)
+			speed = mist.utils.mpsToKnots(speed)
+			altitude = mist.utils.metersToFeet(altitude)
+		end
+
+		if ewrs.useImprovedDetectionLogic then
+			if not v["distance"] then
+				range = ewrs.notAvailable
+			end
+		end
+		
+		local j = #threatTable + 1
+		threatTable[j] = {}
+		threatTable[j].unitType = bogeyType
+		threatTable[j].bearing = bearing
+		threatTable[j].range = range
+		threatTable[j].altitude = altitude
+		threatTable[j].speed = speed
+		threatTable[j].heading = heading
+	end
+	
+	table.sort(threatTable,sortRanges)
+	
+	return threatTable
+end
+
+function ewrs.outText(activePlayer, threatTable)
+	local status, result = pcall(function()
+		--local playerName = activePlayer.player
+		--local groupID = activePlayer.groupID
+		
+		local message = {}
+		local altUnits
+		local speedUnits
+		local rangeUnits
+		if ewrs.groupSettings[tostring(activePlayer.groupID)].measurements == "metric" then
+			altUnits = "m"
+			speedUnits = "Km/h"
+			rangeUnits = "Km"
+		else
+			altUnits = "ft"
+			speedUnits = "Knts"
+			rangeUnits = "NM"
+		end
+		
+		if #threatTable >= 1 then
+			--Display table
+			table.insert(message, "\n")
+			table.insert(message, "EWRS Picture Report for: " .. activePlayer.player .. " -- Reference: " .. ewrs.groupSettings[tostring(activePlayer.groupID)].reference)
+			table.insert(message, "\n\n")
+			table.insert(message, string.format( "%-16s", "TYPE"))
+			table.insert(message, string.format( "%-12s", "BRG"))
+			table.insert(message, string.format( "%-12s", "RNG"))
+			table.insert(message, string.format( "%-21s", "ALT"))
+			table.insert(message, string.format( "%-15s", "SPD"))
+			table.insert(message, string.format( "%-3s", "HDG"))
+			table.insert(message, "\n")
+
+			for k = 1, #threatTable do
+				table.insert(message, "\n")
+				table.insert(message, string.format( "%-16s", threatTable[k].unitType))
+				if threatTable[k].range == ewrs.notAvailable then
+					table.insert(message, string.format( "%-12s", " "))
+					table.insert(message, string.format( "%-12s", "POSITION"))
+					table.insert(message, string.format( "%-21s", " "))
+					table.insert(message, string.format( "%-15s", "UNKNOWN"))
+					table.insert(message, string.format( "%-3s", " "))
+				else
+					table.insert(message, string.format( "%03d", threatTable[k].bearing))
+					table.insert(message, string.format( "%8.1f %s", threatTable[k].range, rangeUnits))
+					table.insert(message, string.format( "%9d %s", threatTable[k].altitude, altUnits))
+					table.insert(message, string.format( "%9d %s", threatTable[k].speed, speedUnits))
+					table.insert(message, string.format( "         %03d", threatTable[k].heading))
+				end
+				table.insert(message, "\n")
+			end
+			trigger.action.outTextForGroup(activePlayer.groupID, table.concat(message), ewrs.messageDisplayTime)
+		else
+			if not ewrs.disableMessageWhenNoThreats then
+				trigger.action.outTextForGroup(activePlayer.groupID, "\nEWRS Picture Report for: " .. activePlayer.player .. "\n\nNo targets detected", ewrs.messageDisplayTime)
+			end
+		end
+	end)
+	if not status then
+		env.error(string.format("EWRS outText Error: %s", result))
+	end
+end
+
+function ewrs.displayMessage()
+	local status, result = pcall(function()
 	for i = 1, #ewrs.activePlayers do
 		if ewrs.groupSettings[tostring(ewrs.activePlayers[i].groupID)].messages then
 			if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
-				local notAvailable = 999999
-				local targets = {}
-				if ewrs.activePlayers[i].side == 2 then
-					targets = ewrs.currentlyDetectedRedUnits
-				else
-					targets = ewrs.currentlyDetectedBlueUnits
-				end
-
-				local referenceX
-				local referenceZ --which is really Y, but Z with DCS vectors
-				local playerName = ewrs.activePlayers[i].player
-				local groupID = ewrs.activePlayers[i].groupID
-				if ewrs.groupSettings[tostring(groupID)].reference == "self" then
-					local self = Unit.getByName(ewrs.activePlayers[i].unitname)
-					local selfpos = self:getPosition()
-					referenceX = selfpos.p.x
-					referenceZ = selfpos.p.z
-				else
-					local bullseye = coalition.getMainRefPoint(ewrs.activePlayers[i].side)
-					referenceX = bullseye.x
-					referenceZ = bullseye.z
-				end
-
-				local message = {}
-				local tmp = {}
-
-				--these are used for labeling text output.
-				local altUnits
-				local speedUnits
-				local rangeUnits
-
-				if ewrs.groupSettings[tostring(groupID)].measurements == "metric" then
-					altUnits = "m"
-					speedUnits = "Km/h"
-					rangeUnits = "Km"
-				else
-					altUnits = "ft"
-					speedUnits = "Knts"
-					rangeUnits = "NM"
-				end
-
-				for k,v in pairs(targets) do
-					local velocity = v["object"]:getVelocity()
-					local bogeypos = v["object"]:getPosition()
-					local bogeyType = nil
-					if ewrs.useImprovedDetectionLogic then
-						if v["type"] then
-							bogeyType = v["object"]:getTypeName()
-						else
-							bogeyType = "  ???  "
-						end
-					else
-						bogeyType = v["object"]:getTypeName()
-					end
-					local bearing = ewrs.getBearing(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z)
-					local heading = ewrs.getHeading(velocity)
-					local range = ewrs.getDistance(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z) -- meters
-					local altitude = bogeypos.p.y --meters
-					local speed = ewrs.getSpeed(velocity) --m/s
-
-					if ewrs.groupSettings[tostring(groupID)].measurements == "metric" then
-						range = range / 1000 --change to KM
-						speed = mist.utils.mpsToKmph(speed)
-						--altitude already in meters
-					else
-						range = mist.utils.metersToNM(range)
-						speed = mist.utils.mpsToKnots(speed)
-						altitude = mist.utils.metersToFeet(altitude)
-					end
-
-					if ewrs.useImprovedDetectionLogic then
-						if not v["distance"] then
-							range = notAvailable
-						end
-					end
-
-					local j = #tmp + 1
-					tmp[j] = {}
-					tmp[j].unitType = bogeyType
-					tmp[j].bearing = bearing
-					tmp[j].range = range
-					tmp[j].altitude = altitude
-					tmp[j].speed = speed
-					tmp[j].heading = heading
-				end
-
-				table.sort(tmp,sortRanges)
-
-				if #targets >= 1 then
-					--Display table
-					table.insert(message, "\n")
-					table.insert(message, "EWRS Picture Report for: " .. playerName .. " -- Reference: " .. ewrs.groupSettings[tostring(groupID)].reference)
-					table.insert(message, "\n\n")
-					table.insert(message, string.format( "%-16s", "TYPE"))
-					table.insert(message, string.format( "%-12s", "BRG"))
-					table.insert(message, string.format( "%-12s", "RNG"))
-					table.insert(message, string.format( "%-21s", "ALT"))
-					table.insert(message, string.format( "%-15s", "SPD"))
-					table.insert(message, string.format( "%-3s", "HDG"))
-					table.insert(message, "\n")
-
-					for k = 1, #tmp do
-						table.insert(message, "\n")
-						table.insert(message, string.format( "%-16s", tmp[k].unitType))
-						if tmp[k].range == notAvailable then
-							table.insert(message, string.format( "%-12s", " "))
-							table.insert(message, string.format( "%-12s", "POSITION"))
-							table.insert(message, string.format( "%-21s", " "))
-							table.insert(message, string.format( "%-15s", "UNKNOWN"))
-							table.insert(message, string.format( "%-3s", " "))
-						else
-							table.insert(message, string.format( "%03d", tmp[k].bearing))
-							table.insert(message, string.format( "%8.1f %s", tmp[k].range, rangeUnits))
-							table.insert(message, string.format( "%9d %s", tmp[k].altitude, altUnits))
-							table.insert(message, string.format( "%9d %s", tmp[k].speed, speedUnits))
-							table.insert(message, string.format( "         %03d", tmp[k].heading))
-						end
-						table.insert(message, "\n")
-					end
-					trigger.action.outTextForGroup(groupID, table.concat(message), ewrs.messageDisplayTime)
-				else -- no targets detected
-					if not ewrs.disableMessageWhenNoThreats then
-						trigger.action.outTextForGroup(groupID, "\nEWRS Picture Report for: " .. playerName .. "\n\nNo targets detected", ewrs.messageDisplayTime)
-					end
-				end -- if #targets >= 1 then
+				ewrs.outText(ewrs.activePlayers[i], ewrs.buildThreatTable(ewrs.activePlayers[i]))
 			end -- if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
 		end -- if ewrs.groupSettings[tostring(ewrs.activePlayers[i].groupID)].messages then
 	end -- for i = 1, #ewrs.activePlayers do
+	end)
+	if not status then
+		env.error(string.format("EWRS displayMessage Error: %s", result))
+	end
 end
 
 function ewrs.buildActivePlayers()
@@ -360,7 +377,12 @@ function ewrs.filterUnits(units)
 		if ewrs.validThreats[v["object"]:getTypeName()] == nil then valid = false end
 		if valid then
 			for nk,nv in pairs (newUnits) do --recursive loop, can't see a way around this
-				if v["object"]:getName() == nv["object"]:getName() then valid = false end
+				if v["object"]:getName() == nv["object"]:getName() then 
+					valid = false
+					if v["type"] then
+						nv["type"] = true
+					end
+				end
 			end
 		end
 		
@@ -585,6 +607,7 @@ ewrs.validThreats = {
 --SCRIPT INIT
 ewrs.currentlyDetectedRedUnits = {}
 ewrs.currentlyDetectedBlueUnits = {}
+ewrs.notAvailable = 999999
 
 ewrs.redEwrUnits = {}
 ewrs.blueEwrUnits = {}
