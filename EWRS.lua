@@ -1,11 +1,10 @@
 --[[
-	Early Warning Radar Script - 1.2 - 12/01/2016
-		- 1.1 - Improved Detection Logic Implemented
-			- Uses extra radar information to know if type and distance is known to the target
-			- Can be switched on and off in the script settings
+	Early Warning Radar Script - 1.3 - 25/01/2016
 		- 1.2 - Fixed bug where clients in MP would break the script
 			- Added some logging events
 			- Added F-86F Sabre to aircraft list - Thanks Zaz0
+		- 1.3 - Added Option to allow picture report to be requested thru F10 menu instead of an automated display
+			- Fixed bug where a known unit type would sometimes still display as ???
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
 	
@@ -19,7 +18,8 @@
 		- Can allow / disable BRA messages to fighters or sides
 		- Uses player aircraft or mission bullseye for BRA reference, can be changed via F10 radio menu or restricted to one reference in the script settings
 		- Can switch between imperial (feet, knots, NM) or metric (meters, km/h, km) measurements using F10 radio menu
-		- Ability to change the message display time and update interval
+		- Ability to change the message display time and automated update interval
+		- Can choose to disable automated messages and allow players to request BRA from F10 menu
 		
 	At the moment, because of limitations within DCS to not show messages to individual units, the reference, measurements, and messages
 	are done per group. So a group of 4 fighters will each receive 4 BRA messages. Each message however, will have the player's name
@@ -33,7 +33,7 @@ ewrs.FIGHTER = 3
 
 ----SCRIPT OPTIONS----
 
-ewrs.messageUpdateInterval = 30 --How often EWRS will update BRA messages (seconds)
+ewrs.messageUpdateInterval = 30 --How often EWRS will update automated BRA messages (seconds)
 ewrs.messageDisplayTime = 25 --How long EWRS BRA messages will show for (seconds)
 ewrs.restrictToOneReference = false -- Disables the ability to change the BRA calls from pilot's own aircraft or bullseye. If this is true, set ewrs.defaultReference to the option you want to restrict to.
 ewrs.defaultReference = "self" --The default reference for BRA calls - can be changed via f10 radio menu if ewrs.restrictToOneReference is false (self or bulls)
@@ -41,8 +41,9 @@ ewrs.defaultMeasurements = "imperial" --Default measurement units - can be chang
 ewrs.disableFightersBRA = false -- disables BRA messages to fighters when true
 ewrs.enableRedTeam = true -- enables / disables EWRS for the red team
 ewrs.enableBlueTeam = true -- enables / disables EWRS for the blue team
-ewrs.disableMessageWhenNoThreats = true -- disables message when no threats are detected - Thanks Rivvern
+ewrs.disableMessageWhenNoThreats = true -- disables message when no threats are detected - Thanks Rivvern - NOTE: If using ewrs.onDemand = true, this has no effect
 ewrs.useImprovedDetectionLogic = true --this makes the messages more realistic. If the radar doesn't know the type or distance to the detected threat, it will be reflected in the picture report / BRA message
+ewrs.onDemand = false --Setting to true will disable the automated messages to everyone and will add an F10 menu to get picture / BRA message.
 
 --[[
 Units with radar to use as part of the EWRS radar network
@@ -84,6 +85,7 @@ ewrs.acCategories = { --Have I left anything out? Please let me know if I have
 [ "Hawk"           ] = ewrs.ATTACK  ,
 [ "Ka-50"          ] = ewrs.HELO    ,
 [ "L-39C"		   ] = ewrs.ATTACK	,
+[ "L-39ZA"         ] = ewrs.ATTACK  , --Added for soon to be released ZA module
 [ "Mi-8MT"         ] = ewrs.HELO    , --This is the Mi-8 module. For some reason its ingame name is shortened
 [ "MiG-15bis"      ] = ewrs.ATTACK  ,
 [ "MiG-21Bis"      ] = ewrs.ATTACK  ,
@@ -100,6 +102,10 @@ ewrs.acCategories = { --Have I left anything out? Please let me know if I have
 }
 
 ----END OF SCRIPT OPTIONS----
+
+
+----INTERNAL FUNCTIONS ***** Be Careful changing things below here ***** ----
+
 
 function ewrs.getDistance(obj1PosX, obj1PosZ, obj2PosX, obj2PosZ)
 	local xDiff = obj1PosX - obj2PosX
@@ -134,18 +140,6 @@ function ewrs.update()
 	timer.scheduleFunction(ewrs.update, nil, timer.getTime() + 5)
 	ewrs.buildActivePlayers()
 	ewrs.buildF10Menu()
-end
-
-function ewrs.startMessageDisplay()
-	timer.scheduleFunction(ewrs.startMessageDisplay, nil, timer.getTime() + ewrs.messageUpdateInterval)
-	ewrs.findRadarUnits()
-	if #ewrs.blueEwrUnits > 0 then
-		ewrs.currentlyDetectedRedUnits = ewrs.findDetectedTargets("red")
-	end
-	if #ewrs.redEwrUnits > 0 then
-		ewrs.currentlyDetectedBlueUnits = ewrs.findDetectedTargets("blue")
-	end
-	ewrs.displayMessage()
 end
 
 function ewrs.buildThreatTable(activePlayer)
@@ -188,7 +182,7 @@ function ewrs.buildThreatTable(activePlayer)
 		else
 			bogeyType = v["object"]:getTypeName()
 		end
-		
+
 		local bearing = ewrs.getBearing(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z)
 		local heading = ewrs.getHeading(velocity)
 		local range = ewrs.getDistance(referenceX,referenceZ,bogeypos.p.x,bogeypos.p.z) -- meters
@@ -220,7 +214,7 @@ function ewrs.buildThreatTable(activePlayer)
 		threatTable[j].speed = speed
 		threatTable[j].heading = heading
 	end
-	
+
 	table.sort(threatTable,sortRanges)
 	
 	return threatTable
@@ -228,8 +222,6 @@ end
 
 function ewrs.outText(activePlayer, threatTable)
 	local status, result = pcall(function()
-		--local playerName = activePlayer.player
-		--local groupID = activePlayer.groupID
 		
 		local message = {}
 		local altUnits
@@ -278,7 +270,7 @@ function ewrs.outText(activePlayer, threatTable)
 			end
 			trigger.action.outTextForGroup(activePlayer.groupID, table.concat(message), ewrs.messageDisplayTime)
 		else
-			if not ewrs.disableMessageWhenNoThreats then
+			if (not ewrs.disableMessageWhenNoThreats) or (ewrs.disableMessageWhenNoThreats and ewrs.onDemand) then
 				trigger.action.outTextForGroup(activePlayer.groupID, "\nEWRS Picture Report for: " .. activePlayer.player .. "\n\nNo targets detected", ewrs.messageDisplayTime)
 			end
 		end
@@ -288,18 +280,36 @@ function ewrs.outText(activePlayer, threatTable)
 	end
 end
 
-function ewrs.displayMessage()
+function ewrs.displayMessageToAll()
 	local status, result = pcall(function()
-	for i = 1, #ewrs.activePlayers do
-		if ewrs.groupSettings[tostring(ewrs.activePlayers[i].groupID)].messages then
-			if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
-				ewrs.outText(ewrs.activePlayers[i], ewrs.buildThreatTable(ewrs.activePlayers[i]))
-			end -- if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
-		end -- if ewrs.groupSettings[tostring(ewrs.activePlayers[i].groupID)].messages then
-	end -- for i = 1, #ewrs.activePlayers do
+		timer.scheduleFunction(ewrs.displayMessageToAll, nil, timer.getTime() + ewrs.messageUpdateInterval)
+		ewrs.findRadarUnits()
+		ewrs.getDetectedTargets()
+		for i = 1, #ewrs.activePlayers do
+			if ewrs.groupSettings[tostring(ewrs.activePlayers[i].groupID)].messages then
+				if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
+					ewrs.outText(ewrs.activePlayers[i], ewrs.buildThreatTable(ewrs.activePlayers[i]))
+				end -- if ewrs.activePlayers[i].side == 1 and #ewrs.redEwrUnits > 0 or ewrs.activePlayers[i].side == 2 and #ewrs.blueEwrUnits > 0 then
+			end -- if ewrs.groupSettings[tostring(ewrs.activePlayers[i].groupID)].messages then
+		end -- for i = 1, #ewrs.activePlayers do
 	end)
 	if not status then
-		env.error(string.format("EWRS displayMessage Error: %s", result))
+		env.error(string.format("EWRS displayMessageToAll Error: %s", result))
+	end
+end
+
+function ewrs.onDemandMessage(args)
+	local status, result = pcall(function()
+		ewrs.findRadarUnits()
+		ewrs.getDetectedTargets()
+		for i = 1, #ewrs.activePlayers do
+			if ewrs.activePlayers[i].groupID == args[1] then
+				ewrs.outText(ewrs.activePlayers[i], ewrs.buildThreatTable(ewrs.activePlayers[i]))
+			end
+		end
+	end)
+	if not status then
+		env.error(string.format("EWRS onDemandMessage Error: %s", result))
 	end
 end
 
@@ -367,20 +377,22 @@ function ewrs.addPlayer(playerName, groupID, unit )
 end
 
 -- filters units so ones detected by multiple radar sites still only get listed once
--- missiles can be detected by some radars. It removes any detections that are not Object.Category.UNITs
+-- Filters out any detected units that are not listed in validThreats
 function ewrs.filterUnits(units)
 	local newUnits = {}
 	for k,v in pairs(units) do
 		local valid = true
-		--local category = v["object"]:getCategory()
-		--if category ~= Object.Category.UNIT then valid = false end
 		if ewrs.validThreats[v["object"]:getTypeName()] == nil then valid = false end
 		if valid then
 			for nk,nv in pairs (newUnits) do --recursive loop, can't see a way around this
 				if v["object"]:getName() == nv["object"]:getName() then 
 					valid = false
+					--update already found unit incase the first detection(s) didn't know type or distance
 					if v["type"] then
 						nv["type"] = true
+					end
+					if v["distance"] then
+						nv["distance"] = true
 					end
 				end
 			end
@@ -391,6 +403,15 @@ function ewrs.filterUnits(units)
 		end
 	end
 	return newUnits
+end
+
+function ewrs.getDetectedTargets()
+	if #ewrs.blueEwrUnits > 0 then
+		ewrs.currentlyDetectedRedUnits = ewrs.findDetectedTargets("red")
+	end
+	if #ewrs.redEwrUnits > 0 then
+		ewrs.currentlyDetectedBlueUnits = ewrs.findDetectedTargets("blue")
+	end
 end
 
 function ewrs.findDetectedTargets(side)
@@ -486,6 +507,11 @@ function ewrs.buildF10Menu()
 			local stringGroupID = tostring(groupID)
 			if ewrs.builtF10Menus[stringGroupID] == nil then
 				local rootPath = missionCommands.addSubMenuForGroup(groupID, "EWRS")
+				
+				if ewrs.onDemand then
+					missionCommands.addCommandForGroup(groupID, "Request Picture",rootPath,ewrs.onDemandMessage,{groupID})
+				end
+				
 				if not ewrs.restrictToOneReference then
 					local referenceSetPath = missionCommands.addSubMenuForGroup(groupID,"Set GROUP's reference point", rootPath)
 					missionCommands.addCommandForGroup(groupID, "Set to Bullseye",referenceSetPath,ewrs.setGroupReference,{groupID, "bulls"})
@@ -496,9 +522,11 @@ function ewrs.buildF10Menu()
 				missionCommands.addCommandForGroup(groupID, "Set to Imperial (feet, knts)",measurementsSetPath,ewrs.setGroupMeasurements,{groupID, "imperial"})
 				missionCommands.addCommandForGroup(groupID, "Set to Metric (meters, km/h)",measurementsSetPath,ewrs.setGroupMeasurements,{groupID, "metric"})
 
-				local messageOnOffPath = missionCommands.addSubMenuForGroup(groupID, "Turn Picture Report On/Off",rootPath)
-				missionCommands.addCommandForGroup(groupID, "Message ON", messageOnOffPath, ewrs.setGroupMessages, {groupID, true})
-				missionCommands.addCommandForGroup(groupID, "Message OFF", messageOnOffPath, ewrs.setGroupMessages, {groupID, false})
+				if not ewrs.onDemand then
+					local messageOnOffPath = missionCommands.addSubMenuForGroup(groupID, "Turn Picture Report On/Off",rootPath)
+					missionCommands.addCommandForGroup(groupID, "Message ON", messageOnOffPath, ewrs.setGroupMessages, {groupID, true})
+					missionCommands.addCommandForGroup(groupID, "Message OFF", messageOnOffPath, ewrs.setGroupMessages, {groupID, false})
+				end
 
 				ewrs.builtF10Menus[stringGroupID] = true
 			end
@@ -607,18 +635,17 @@ ewrs.validThreats = {
 --SCRIPT INIT
 ewrs.currentlyDetectedRedUnits = {}
 ewrs.currentlyDetectedBlueUnits = {}
-ewrs.notAvailable = 999999
-
 ewrs.redEwrUnits = {}
 ewrs.blueEwrUnits = {}
-
 ewrs.activePlayers = {}
 ewrs.groupSettings = {}
-
 ewrs.builtF10Menus = {}
+ewrs.notAvailable = 999999
 
 ewrs.update()
-timer.scheduleFunction(ewrs.startMessageDisplay, nil, timer.getTime() + ewrs.messageUpdateInterval)
+if not ewrs.onDemand then
+	timer.scheduleFunction(ewrs.displayMessageToAll, nil, timer.getTime() + ewrs.messageUpdateInterval)
+end
 trigger.action.outText("EWRS by Steggles is now running",15)
 env.info("EWRS Running")
 
