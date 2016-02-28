@@ -44,6 +44,7 @@ ewrs.enableBlueTeam = true -- enables / disables EWRS for the blue team
 ewrs.disableMessageWhenNoThreats = true -- disables message when no threats are detected - Thanks Rivvern - NOTE: If using ewrs.onDemand = true, this has no effect
 ewrs.useImprovedDetectionLogic = true --this makes the messages more realistic. If the radar doesn't know the type or distance to the detected threat, it will be reflected in the picture report / BRA message
 ewrs.onDemand = false --Setting to true will disable the automated messages to everyone and will add an F10 menu to get picture / BRA message.
+ewrs.maxThreatDisplay = 5 -- Max amounts of threats to display on picture report (0 will display all) 
 
 --[[
 Units with radar to use as part of the EWRS radar network
@@ -249,8 +250,15 @@ function ewrs.outText(activePlayer, threatTable)
 			table.insert(message, string.format( "%-15s", "SPD"))
 			table.insert(message, string.format( "%-3s", "HDG"))
 			table.insert(message, "\n")
-
-			for k = 1, #threatTable do
+			
+			local maxThreats = nil
+			if ewrs.maxThreatDisplay > 0 and #threatTable > ewrs.maxThreatDisplay then
+				maxThreats = ewrs.maxThreatDisplay
+			else
+				maxThreats = #threatTable
+			end
+				
+			for k = 1, maxThreats do
 				table.insert(message, "\n")
 				table.insert(message, string.format( "%-16s", threatTable[k].unitType))
 				if threatTable[k].range == ewrs.notAvailable then
@@ -270,7 +278,7 @@ function ewrs.outText(activePlayer, threatTable)
 			end
 			trigger.action.outTextForGroup(activePlayer.groupID, table.concat(message), ewrs.messageDisplayTime)
 		else
-			if (not ewrs.disableMessageWhenNoThreats) or (ewrs.disableMessageWhenNoThreats and ewrs.onDemand) then
+			if (not ewrs.disableMessageWhenNoThreats) or (ewrs.onDemand) then
 				trigger.action.outTextForGroup(activePlayer.groupID, "\nEWRS Picture Report for: " .. activePlayer.player .. "\n\nNo targets detected", ewrs.messageDisplayTime)
 			end
 		end
