@@ -8,6 +8,8 @@ Early Warning Radar Script for DCS World
 		- Uses player aircraft or mission bullseye for BRA reference, can be changed via F10 radio menu or restricted to one reference in the script settings
 		- Can switch between imperial (feet, knots, NM) or metric (meters, km/h, km) measurements using F10 radio menu
 		- Ability to change the message display time and update interval
+		- Can choose to disable automated messages and allow players to request BRA from F10 menu
+		- Can allow players to request Bogey Dope at any time through F10 radio menu
 
 	At the moment, because of limitations within DCS to not show messages to individual units, the reference, measurements, and messages
 	are done per group. So a group of 4 fighters will each receive 4 BRA messages. Each message however, will have the player's name
