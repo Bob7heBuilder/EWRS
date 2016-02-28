@@ -44,7 +44,8 @@ ewrs.enableBlueTeam = true -- enables / disables EWRS for the blue team
 ewrs.disableMessageWhenNoThreats = true -- disables message when no threats are detected - Thanks Rivvern - NOTE: If using ewrs.onDemand = true, this has no effect
 ewrs.useImprovedDetectionLogic = true --this makes the messages more realistic. If the radar doesn't know the type or distance to the detected threat, it will be reflected in the picture report / BRA message
 ewrs.onDemand = false --Setting to true will disable the automated messages to everyone and will add an F10 menu to get picture / BRA message.
-ewrs.maxThreatDisplay = 5 -- Max amounts of threats to display on picture report (0 will display all) 
+ewrs.maxThreatDisplay = 5 -- Max amounts of threats to display on picture report (0 will display all)
+ewrs.allowBogeyDope = true -- Allows pilots to request a bogey dope with the automated messages running. It will display only the cloest threat, and will always reference the players own aircraft. Has no effect if ewrs.onDemand == true
 
 --[[
 Units with radar to use as part of the EWRS radar network
@@ -143,7 +144,7 @@ function ewrs.update()
 	ewrs.buildF10Menu()
 end
 
-function ewrs.buildThreatTable(activePlayer)
+function ewrs.buildThreatTable(activePlayer, bogeyDope)
 	local function sortRanges(v1,v2)
 		return v1.range < v2.range
 	end
@@ -155,9 +156,10 @@ function ewrs.buildThreatTable(activePlayer)
 		targets = ewrs.currentlyDetectedBlueUnits
 	end
 	
+	local bogeyDope = bogeyDope or false
 	local referenceX
 	local referenceZ
-	if ewrs.groupSettings[tostring(activePlayer.groupID)].reference == "self" then
+	if ewrs.groupSettings[tostring(activePlayer.groupID)].reference == "self" or bogeyDope then
 		local _self = Unit.getByName(activePlayer.unitname)
 		local selfpos = _self:getPosition()
 		referenceX = selfpos.p.x
@@ -221,13 +223,14 @@ function ewrs.buildThreatTable(activePlayer)
 	return threatTable
 end
 
-function ewrs.outText(activePlayer, threatTable)
+function ewrs.outText(activePlayer, threatTable, bogeyDope)
 	local status, result = pcall(function()
 		
 		local message = {}
 		local altUnits
 		local speedUnits
 		local rangeUnits
+		local bogeyDope = bogeyDope or false
 		if ewrs.groupSettings[tostring(activePlayer.groupID)].measurements == "metric" then
 			altUnits = "m"
 			speedUnits = "Km/h"
@@ -239,9 +242,23 @@ function ewrs.outText(activePlayer, threatTable)
 		end
 		
 		if #threatTable >= 1 then
+			local maxThreats = nil
+			local messageGreeting = nil
+			if bogeyDope then
+				maxThreats = 1
+				messageGreeting = "EWRS Bogey Dope for: " .. activePlayer.player
+			else
+				if ewrs.maxThreatDisplay > 0 and #threatTable > ewrs.maxThreatDisplay then
+					maxThreats = ewrs.maxThreatDisplay
+				else
+					maxThreats = #threatTable
+				end
+				messageGreeting = "EWRS Picture Report for: " .. activePlayer.player .. " -- Reference: " .. ewrs.groupSettings[tostring(activePlayer.groupID)].reference
+			end
+			
 			--Display table
 			table.insert(message, "\n")
-			table.insert(message, "EWRS Picture Report for: " .. activePlayer.player .. " -- Reference: " .. ewrs.groupSettings[tostring(activePlayer.groupID)].reference)
+			table.insert(message, messageGreeting)
 			table.insert(message, "\n\n")
 			table.insert(message, string.format( "%-16s", "TYPE"))
 			table.insert(message, string.format( "%-12s", "BRG"))
@@ -250,13 +267,6 @@ function ewrs.outText(activePlayer, threatTable)
 			table.insert(message, string.format( "%-15s", "SPD"))
 			table.insert(message, string.format( "%-3s", "HDG"))
 			table.insert(message, "\n")
-			
-			local maxThreats = nil
-			if ewrs.maxThreatDisplay > 0 and #threatTable > ewrs.maxThreatDisplay then
-				maxThreats = ewrs.maxThreatDisplay
-			else
-				maxThreats = #threatTable
-			end
 				
 			for k = 1, maxThreats do
 				table.insert(message, "\n")
@@ -312,7 +322,7 @@ function ewrs.onDemandMessage(args)
 		ewrs.getDetectedTargets()
 		for i = 1, #ewrs.activePlayers do
 			if ewrs.activePlayers[i].groupID == args[1] then
-				ewrs.outText(ewrs.activePlayers[i], ewrs.buildThreatTable(ewrs.activePlayers[i]))
+				ewrs.outText(ewrs.activePlayers[i], ewrs.buildThreatTable(ewrs.activePlayers[i],args[2]),args[2])
 			end
 		end
 	end)
@@ -516,6 +526,10 @@ function ewrs.buildF10Menu()
 			if ewrs.builtF10Menus[stringGroupID] == nil then
 				local rootPath = missionCommands.addSubMenuForGroup(groupID, "EWRS")
 				
+				if ewrs.allowBogeyDope or ewrs.onDemand then
+					missionCommands.addCommandForGroup(groupID, "Request Bogey Dope",rootPath,ewrs.onDemandMessage,{groupID,true})
+				end
+				
 				if ewrs.onDemand then
 					missionCommands.addCommandForGroup(groupID, "Request Picture",rootPath,ewrs.onDemandMessage,{groupID})
 				end
@@ -659,5 +673,6 @@ env.info("EWRS Running")
 
 --[[
 TODO: 
-
+	- Get rid of ewrs.validThreats and use info from Grimes in Scripting issues thread to use categories on detected threats to see if they are valid
+		http://forums.eagle.ru/showpost.php?p=2693706&postcount=54
 ]]
