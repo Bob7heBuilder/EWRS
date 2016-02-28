@@ -1,16 +1,7 @@
 --[[
-	Early Warning Radar Script - 1.3 - 25/01/2016
-		- 1.2 - Fixed bug where clients in MP would break the script
-			- Added some logging events
-			- Added F-86F Sabre to aircraft list - Thanks Zaz0
-		- 1.3 - Added Option to allow picture report to be requested thru F10 menu instead of an automated display
-			- Fixed bug where a known unit type would sometimes still display as ???
+	Early Warning Radar Script - 1.4 - 29/02/2016
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
-	
-	Built and Tested in DCS 1.5.2 - See https://github.com/Bob7heBuilder/EWRS for the latest version
-	
-	This script uses MIST --  https://github.com/mrSkortch/MissionScriptingTools
 	
 	Features:
 		- Uses in-game radar information to detect targets so terrain masking, beaming, low altitude flying, etc is effective for avoiding detection
@@ -20,10 +11,25 @@
 		- Can switch between imperial (feet, knots, NM) or metric (meters, km/h, km) measurements using F10 radio menu
 		- Ability to change the message display time and automated update interval
 		- Can choose to disable automated messages and allow players to request BRA from F10 menu
+		- Can allow players to request Bogey Dope at any time through F10 radio menu
+
+	Built and Tested in DCS 1.5 - See https://github.com/Bob7heBuilder/EWRS for the latest version
+
+	This script uses MIST 4.0.57 or later - https://github.com/mrSkortch/MissionScriptingTools
 		
 	At the moment, because of limitations within DCS to not show messages to individual units, the reference, measurements, and messages
 	are done per group. So a group of 4 fighters will each receive 4 BRA messages. Each message however, will have the player's name
 	in it, that its refering to. Its unfortunate, but nothing I can do about it.
+
+	Changes:
+	- 1.3 - Added Option to allow picture report to be requested thru F10 menu instead of an automated display
+			- Fixed bug where a known unit type would sometimes still display as ???
+	- 1.4 - Added setting to be able to limit the amount of threats displayed in a picture report
+			- Added option to enable Bogey Dopes
+				* Mission designer can turn on / off in script settings
+				* Pilots can request thru the F10 menu and it will show the BRA to the nearest hostile aircraft that has
+				been detected. It will always reference the requesting pilot's own aircraft.
+			- Finally implemented a cleaner workaround for some ground units being detected and listed in picture report
 ]]
 
 ewrs = {} --DO NOT REMOVE
@@ -45,7 +51,7 @@ ewrs.disableMessageWhenNoThreats = true -- disables message when no threats are 
 ewrs.useImprovedDetectionLogic = true --this makes the messages more realistic. If the radar doesn't know the type or distance to the detected threat, it will be reflected in the picture report / BRA message
 ewrs.onDemand = false --Setting to true will disable the automated messages to everyone and will add an F10 menu to get picture / BRA message.
 ewrs.maxThreatDisplay = 5 -- Max amounts of threats to display on picture report (0 will display all)
-ewrs.allowBogeyDope = true -- Allows pilots to request a bogey dope with the automated messages running. It will display only the cloest threat, and will always reference the players own aircraft. Has no effect if ewrs.onDemand == true
+ewrs.allowBogeyDope = true -- Allows pilots to request a bogey dope even with the automated messages running. It will display only the cloest threat, and will always reference the players own aircraft.
 
 --[[
 Units with radar to use as part of the EWRS radar network
@@ -87,8 +93,8 @@ ewrs.acCategories = { --Have I left anything out? Please let me know if I have
 [ "Hawk"           ] = ewrs.ATTACK  ,
 [ "Ka-50"          ] = ewrs.HELO    ,
 [ "L-39C"		   ] = ewrs.ATTACK	,
-[ "L-39ZA"         ] = ewrs.ATTACK  , --Added for soon to be released ZA module
-[ "Mi-8MT"         ] = ewrs.HELO    , --This is the Mi-8 module. For some reason its ingame name is shortened
+[ "L-39ZA"         ] = ewrs.ATTACK  ,
+[ "Mi-8MT"         ] = ewrs.HELO    ,
 [ "MiG-15bis"      ] = ewrs.ATTACK  ,
 [ "MiG-21Bis"      ] = ewrs.ATTACK  ,
 [ "MiG-29A"		   ] = ewrs.FIGHTER	,
@@ -375,6 +381,15 @@ function ewrs.getGroupId(_unit) --Temp fix for client groups not being accessabl
     return nil
 end
 
+function ewrs.getGroupCategory(unit)
+	local unitDB = mist.DBs.unitsById[tonumber(unit:getID())]
+	 if unitDB ~= nil and unitDB.category then
+        return unitDB.category
+    end
+
+    return nil
+end
+
 function ewrs.addPlayer(playerName, groupID, unit )
 	local status, result = pcall(function()
 		local i = #ewrs.activePlayers + 1
@@ -395,12 +410,19 @@ function ewrs.addPlayer(playerName, groupID, unit )
 end
 
 -- filters units so ones detected by multiple radar sites still only get listed once
--- Filters out any detected units that are not listed in validThreats
+-- Filters out anything that isn't a plane or helicopter
 function ewrs.filterUnits(units)
 	local newUnits = {}
 	for k,v in pairs(units) do
 		local valid = true
-		if ewrs.validThreats[v["object"]:getTypeName()] == nil then valid = false end
+		if v["object"]:getCategory() ~= Object.Category.UNIT then --rare but i've had it detect missiles
+			valid = false
+		end
+		if valid then --another check cause it seems AI radar can detected some ground units
+			local category = ewrs.getGroupCategory(v["object"])
+			if category ~= "plane" and category ~= "helicopter" then valid = false end
+		end
+
 		if valid then
 			for nk,nv in pairs (newUnits) do --recursive loop, can't see a way around this
 				if v["object"]:getName() == nv["object"]:getName() then 
@@ -526,7 +548,7 @@ function ewrs.buildF10Menu()
 			if ewrs.builtF10Menus[stringGroupID] == nil then
 				local rootPath = missionCommands.addSubMenuForGroup(groupID, "EWRS")
 				
-				if ewrs.allowBogeyDope or ewrs.onDemand then
+				if ewrs.allowBogeyDope then
 					missionCommands.addCommandForGroup(groupID, "Request Bogey Dope",rootPath,ewrs.onDemandMessage,{groupID,true})
 				end
 				
@@ -560,7 +582,8 @@ function ewrs.buildF10Menu()
 	end
 end
 
---temp fix for ground units being detected by radar
+--temp fix for ground units being detected by radar - FIXED
+--[[ Leaving this here just in case I introduce threat based filtering, saves me writing it again
 ewrs.validThreats = {
 ["A-10A"] = true,
 ["A-10C"] = true,
@@ -653,6 +676,7 @@ ewrs.validThreats = {
 ["UH-60A"] = true,
 ["Yak-40"] = true,
 }
+]]
 
 --SCRIPT INIT
 ewrs.currentlyDetectedRedUnits = {}
@@ -673,6 +697,5 @@ env.info("EWRS Running")
 
 --[[
 TODO: 
-	- Get rid of ewrs.validThreats and use info from Grimes in Scripting issues thread to use categories on detected threats to see if they are valid
-		http://forums.eagle.ru/showpost.php?p=2693706&postcount=54
+	- Threat based filtering if theres interest.
 ]]
