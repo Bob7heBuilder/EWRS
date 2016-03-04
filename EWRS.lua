@@ -1,5 +1,5 @@
 --[[
-	Early Warning Radar Script - 1.4 - 29/02/2016
+	Early Warning Radar Script - 1.4.1 - 4/03/2016
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
 	
@@ -30,6 +30,7 @@
 				* Pilots can request thru the F10 menu and it will show the BRA to the nearest hostile aircraft that has
 				been detected. It will always reference the requesting pilot's own aircraft.
 			- Finally implemented a cleaner workaround for some ground units being detected and listed in picture report
+	- 1.4.1 - Added some ships to search radar list, you will need to remove the comment markers (--) at the start of the line to activate
 ]]
 
 ewrs = {} --DO NOT REMOVE
@@ -72,7 +73,21 @@ ewrs.validSearchRadars = {
 "E-3A",					--AWACS
 "Roland Radar",			--Roland Search Radar
 "Hawk sr",				--Hawk SAM Search Radar
-"Patriot str"			--Patriot SAM Search and Track Radar
+"Patriot str",			--Patriot SAM Search and Track Radar
+
+--Ships - I've left these commented out because I don't know which ones have radar
+--and which ones don't. Just remove the comment to activate them (the '--' at the start of the line)
+
+--"MOSCOW",				-- CG 1164 Moskva
+--"TICONDEROG",			-- CG-60 Normandy
+--"PIOTR",				-- CGN 1144.2 Pyotr Velikiy
+--"KUZNECOW",			-- CV 1143.5 Admiral Kuzentsov
+--"VINSON",				-- CVN-70 Carl Vinson
+--"REZKY",				-- FF 1135M Rezky
+--"NEUSTRASH",			-- FFG 11540 Neustrashimy
+--"PERRY",				-- FFG-7CL Oliver Hazzard Perry
+--"ALBATROS",			-- FFL 1124.4 Grisha
+--"MOLNIYA",			-- FSG 1241.1MP Molniya
 }
 
 --[[
