@@ -1,5 +1,5 @@
 --[[
-	Early Warning Radar Script - 1.4.1 - 4/03/2016
+	Early Warning Radar Script - 1.5 - 16/03/2016
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
 	
@@ -31,6 +31,7 @@
 				been detected. It will always reference the requesting pilot's own aircraft.
 			- Finally implemented a cleaner workaround for some ground units being detected and listed in picture report
 	- 1.4.1 - Added some ships to search radar list, you will need to remove the comment markers (--) at the start of the line to activate
+	- 1.5 - Added ability to request picture of friendly aircraft positions referencing your own aircraft - Mission designer chooses if this feature is active or not
 ]]
 
 ewrs = {} --DO NOT REMOVE
@@ -53,6 +54,8 @@ ewrs.useImprovedDetectionLogic = true --this makes the messages more realistic. 
 ewrs.onDemand = false --Setting to true will disable the automated messages to everyone and will add an F10 menu to get picture / BRA message.
 ewrs.maxThreatDisplay = 5 -- Max amounts of threats to display on picture report (0 will display all)
 ewrs.allowBogeyDope = true -- Allows pilots to request a bogey dope even with the automated messages running. It will display only the cloest threat, and will always reference the players own aircraft.
+ewrs.allowFriendlyPicture = true -- Allows pilots to request picture of friendly aircraft
+ewrs.maxFriendlyDisplay = 5 -- Limits the amount of friendly aircraft shown on friendly picture
 
 --[[
 Units with radar to use as part of the EWRS radar network
@@ -244,7 +247,7 @@ function ewrs.buildThreatTable(activePlayer, bogeyDope)
 	return threatTable
 end
 
-function ewrs.outText(activePlayer, threatTable, bogeyDope)
+function ewrs.outText(activePlayer, threatTable, bogeyDope, greeting)
 	local status, result = pcall(function()
 		
 		local message = {}
@@ -265,16 +268,17 @@ function ewrs.outText(activePlayer, threatTable, bogeyDope)
 		if #threatTable >= 1 then
 			local maxThreats = nil
 			local messageGreeting = nil
-			if bogeyDope then
-				maxThreats = 1
-				messageGreeting = "EWRS Bogey Dope for: " .. activePlayer.player
-			else
-				if ewrs.maxThreatDisplay > 0 and #threatTable > ewrs.maxThreatDisplay then
-					maxThreats = ewrs.maxThreatDisplay
+			if greeting == nil then
+				if bogeyDope then
+					maxThreats = 1
+					messageGreeting = "EWRS Bogey Dope for: " .. activePlayer.player
 				else
-					maxThreats = #threatTable
+					maxThreats = ewrs.maxThreatDisplay
+					messageGreeting = "EWRS Picture Report for: " .. activePlayer.player .. " -- Reference: " .. ewrs.groupSettings[tostring(activePlayer.groupID)].reference
 				end
-				messageGreeting = "EWRS Picture Report for: " .. activePlayer.player .. " -- Reference: " .. ewrs.groupSettings[tostring(activePlayer.groupID)].reference
+			else
+				messageGreeting = greeting
+				maxThreats = ewrs.maxFriendlyDisplay
 			end
 			
 			--Display table
@@ -290,6 +294,7 @@ function ewrs.outText(activePlayer, threatTable, bogeyDope)
 			table.insert(message, "\n")
 				
 			for k = 1, maxThreats do
+				if threatTable[k] == nil then break end
 				table.insert(message, "\n")
 				table.insert(message, string.format( "%-16s", threatTable[k].unitType))
 				if threatTable[k].range == ewrs.notAvailable then
@@ -309,8 +314,11 @@ function ewrs.outText(activePlayer, threatTable, bogeyDope)
 			end
 			trigger.action.outTextForGroup(activePlayer.groupID, table.concat(message), ewrs.messageDisplayTime)
 		else
-			if (not ewrs.disableMessageWhenNoThreats) or (ewrs.onDemand) then
+			if (not ewrs.disableMessageWhenNoThreats) or (ewrs.onDemand) and greeting == nil then
 				trigger.action.outTextForGroup(activePlayer.groupID, "\nEWRS Picture Report for: " .. activePlayer.player .. "\n\nNo targets detected", ewrs.messageDisplayTime)
+			end
+			if greeting ~= nil then
+				trigger.action.outTextForGroup(activePlayer.groupID, "\nEWRS Friendly Picture for: " .. activePlayer.player .. "\n\nNo friendlies detected", ewrs.messageDisplayTime)
 			end
 		end
 	end)
@@ -349,6 +357,91 @@ function ewrs.onDemandMessage(args)
 	end)
 	if not status then
 		env.error(string.format("EWRS onDemandMessage Error: %s", result))
+	end
+end
+
+function ewrs.buildFriendlyTable(friendlyNames,activePlayer)
+	local function sortRanges(v1,v2)
+		return v1.range < v2.range
+	end
+
+	local units = {}
+	for i =1, #friendlyNames do
+		local unit = Unit.getByName(friendlyNames[i])
+		if unit ~= nil then
+			table.insert(units,unit)
+		else
+			--env.error("Friendly Picture - Unit not found: "..friendlyNames[i]) -- Client Planes that are not active will fall into here.
+		end
+	end
+	
+	local _self = Unit.getByName(activePlayer.unitname)
+	local selfpos = _self:getPosition()
+	local referenceX = selfpos.p.x
+	local referenceZ = selfpos.p.z
+	
+	local friendlyTable = {}
+	
+	for k,v in pairs(units) do
+		local velocity = v:getVelocity()
+		local pos = v:getPosition()
+		local bogeyType = v:getTypeName()
+		if pos.p.x ~= selfpos.p.x and pos.p.z ~= selfpos.p.z then --same position as self, means its you!
+
+			local bearing = ewrs.getBearing(referenceX,referenceZ,pos.p.x,pos.p.z)
+			local heading = ewrs.getHeading(velocity)
+			local range = ewrs.getDistance(referenceX,referenceZ,pos.p.x,pos.p.z) -- meters
+			local altitude = pos.p.y --meters
+			local speed = ewrs.getSpeed(velocity) --m/s
+
+			if ewrs.groupSettings[tostring(activePlayer.groupID)].measurements == "metric" then
+				range = range / 1000 --change to KM
+				speed = mist.utils.mpsToKmph(speed)
+				--altitude already in meters
+			else
+				range = mist.utils.metersToNM(range)
+				speed = mist.utils.mpsToKnots(speed)
+				altitude = mist.utils.metersToFeet(altitude)
+			end
+		
+			local j = #friendlyTable + 1
+			friendlyTable[j] = {}
+			friendlyTable[j].unitType = bogeyType
+			friendlyTable[j].bearing = bearing
+			friendlyTable[j].range = range
+			friendlyTable[j].altitude = altitude
+			friendlyTable[j].speed = speed
+			friendlyTable[j].heading = heading
+		else
+			--env.info("Friendly Picture - Found Self") 
+		end
+	end
+
+	table.sort(friendlyTable,sortRanges)
+	
+	return friendlyTable
+end
+
+function ewrs.friendlyPicture(args)
+	local status, result = pcall(function()
+		for i = 1, #ewrs.activePlayers do
+			if ewrs.activePlayers[i].groupID == args[1] then
+				local sideString = nil
+				if  ewrs.activePlayers[i].side == 1 then
+					sideString = "[red]"
+				else
+					sideString = "[blue]"
+				end
+				local filter = {sideString.."[helicopter]", sideString.."[plane]"}
+				local friendlies = mist.makeUnitTable(filter) --find a way to do this only once if there is more then 1 person in a group
+				local friendlyTable = ewrs.buildFriendlyTable(friendlies,ewrs.activePlayers[i])
+				local greeting = "EWRS Friendly Picture for: " .. ewrs.activePlayers[i].player
+				ewrs.outText(ewrs.activePlayers[i],friendlyTable,false,greeting)
+			end
+		end
+	end)
+	if not status then
+		env.error(string.format("EWRS friendlyPicture Error: %s", result))
 	end
 end
 
@@ -571,6 +664,10 @@ function ewrs.buildF10Menu()
 					missionCommands.addCommandForGroup(groupID, "Request Picture",rootPath,ewrs.onDemandMessage,{groupID})
 				end
 				
+				if ewrs.allowFriendlyPicture then
+					missionCommands.addCommandForGroup(groupID, "Request Friendly Picture",rootPath,ewrs.friendlyPicture,{groupID})
+				end
+				
 				if not ewrs.restrictToOneReference then
 					local referenceSetPath = missionCommands.addSubMenuForGroup(groupID,"Set GROUP's reference point", rootPath)
 					missionCommands.addCommandForGroup(groupID, "Set to Bullseye",referenceSetPath,ewrs.setGroupReference,{groupID, "bulls"})
@@ -712,5 +809,7 @@ env.info("EWRS Running")
 
 --[[
 TODO: 
+	- Add check on friendly picture to not give one if no AWACS / EWR units are active. Doesn't use radar info anyway. Maybe just leave it to help out people with SA? Feedback Please!!
+	- Clean up functions and arguments from bogeyDope and friendly picture additions
 	- Threat based filtering if theres interest.
 ]]
