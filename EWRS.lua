@@ -368,7 +368,8 @@ function ewrs.buildFriendlyTable(friendlyNames,activePlayer)
 	local units = {}
 	for i =1, #friendlyNames do
 		local unit = Unit.getByName(friendlyNames[i])
-		if unit ~= nil then
+		if unit ~= nil and unit:isActive() then
+		
 			table.insert(units,unit)
 		else
 			--env.error("Friendly Picture - Unit not found: "..friendlyNames[i]) -- Client Planes that are not active will fall into here.
