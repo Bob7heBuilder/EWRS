@@ -1,5 +1,5 @@
 --[[
-	Early Warning Radar Script - 1.5 - 16/03/2016
+	Early Warning Radar Script - 1.5.1 - 29/06/2016
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
 	
@@ -32,6 +32,7 @@
 			- Finally implemented a cleaner workaround for some ground units being detected and listed in picture report
 	- 1.4.1 - Added some ships to search radar list, you will need to remove the comment markers (--) at the start of the line to activate
 	- 1.5 - Added ability to request picture of friendly aircraft positions referencing your own aircraft - Mission designer chooses if this feature is active or not
+	- 1.5.1 - Added Gazelle to acCategories
 ]]
 
 ewrs = {} --DO NOT REMOVE
