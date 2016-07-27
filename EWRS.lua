@@ -1,5 +1,5 @@
 --[[
-	Early Warning Radar Script - 1.5.1 - 29/06/2016
+	Early Warning Radar Script - 1.5.2 - 27/07/2016
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
 	
@@ -33,6 +33,7 @@
 	- 1.4.1 - Added some ships to search radar list, you will need to remove the comment markers (--) at the start of the line to activate
 	- 1.5 - Added ability to request picture of friendly aircraft positions referencing your own aircraft - Mission designer chooses if this feature is active or not
 	- 1.5.1 - Added Gazelle to acCategories
+	- 1.5.2 - Added F5E to acCategories
 ]]
 
 ewrs = {} --DO NOT REMOVE
@@ -107,6 +108,7 @@ ewrs.acCategories = { --Have I left anything out? Please let me know if I have
 [ "Bf-109K-4"      ] = ewrs.ATTACK  ,
 [ "C-101EB"        ] = ewrs.ATTACK  ,
 [ "F-15C"          ] = ewrs.FIGHTER ,
+[ "F-5E-3"		   ] = ewrs.ATTACK
 [ "FW-190D9"       ] = ewrs.ATTACK  ,
 [ "F-86F Sabre"	   ] = ewrs.FIGHTER ,
 [ "Hawk"           ] = ewrs.ATTACK  ,
