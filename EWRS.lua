@@ -1,5 +1,5 @@
 --[[
-	Early Warning Radar Script - 1.5.2 - 27/07/2016
+	Early Warning Radar Script - 1.5.3 - 07/11/2016
 	
 	Allows use of units with radars to provide Bearing Range and Altitude information via text display to player aircraft
 	
@@ -34,6 +34,9 @@
 	- 1.5 - Added ability to request picture of friendly aircraft positions referencing your own aircraft - Mission designer chooses if this feature is active or not
 	- 1.5.1 - Added Gazelle to acCategories
 	- 1.5.2 - Added F5E to acCategories
+	- 1.5.3 - Fixed bug with maxThreatDisplay set at 0 not displaying any threats
+			- Added Mistral Gazelle
+			- Added C-101CC
 ]]
 
 ewrs = {} --DO NOT REMOVE
@@ -107,6 +110,7 @@ ewrs.acCategories = { --Have I left anything out? Please let me know if I have
 [ "A-10C"          ] = ewrs.ATTACK  ,
 [ "Bf-109K-4"      ] = ewrs.ATTACK  ,
 [ "C-101EB"        ] = ewrs.ATTACK  ,
+[ "C-101CC"		   ] = ewrs.ATTACK  ,
 [ "F-15C"          ] = ewrs.FIGHTER ,
 [ "F-5E-3"		   ] = ewrs.ATTACK	,
 [ "FW-190D9"       ] = ewrs.ATTACK  ,
@@ -124,6 +128,7 @@ ewrs.acCategories = { --Have I left anything out? Please let me know if I have
 [ "P-51D"          ] = ewrs.ATTACK	,
 [ "SA342M"		   ] = ewrs.HELO	,
 [ "SA342L"		   ] = ewrs.HELO	,
+[ "SA342Mistral"   ] = ewrs.HELO	,
 [ "Su-25"          ] = ewrs.ATTACK	,
 [ "Su-25T"         ] = ewrs.ATTACK	,
 [ "Su-27"          ] = ewrs.FIGHTER	,
@@ -278,7 +283,11 @@ function ewrs.outText(activePlayer, threatTable, bogeyDope, greeting)
 					maxThreats = 1
 					messageGreeting = "EWRS Bogey Dope for: " .. activePlayer.player
 				else
-					maxThreats = ewrs.maxThreatDisplay
+					if ewrs.maxThreatDisplay == 0 then
+						maxThreats = 999
+					else
+						maxThreats = ewrs.maxThreatDisplay
+					end
 					messageGreeting = "EWRS Picture Report for: " .. activePlayer.player .. " -- Reference: " .. ewrs.groupSettings[tostring(activePlayer.groupID)].reference
 				end
 			else
