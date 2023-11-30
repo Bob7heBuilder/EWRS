@@ -16,17 +16,17 @@ Early Warning Radar Script for DCS World
 	in it, that its refering to. Its unfortunate, but nothing I can do about it.
 
 # Script Setup
-Setting up the script is easy. You will need MIST - Available here:  https://github.com/mrSkortch/MissionScriptingTools
+Setting up the script is easy. You will need MOOSE-  Available here:  https://github.com/FlightControl-Master
 
 First open EWRS.lua in a text editor (Notepad++ is a good one to use), and set the script options how you want it setup. Its all commented in the code on what each one does.
 
-Then in your mission, setup 2 triggers, one to load MIST and the other to load EWRS.lua. Your 2 finished triggers should look like this:
+Then in your mission, setup 2 triggers, one to load MOOSE and the other to load EWRS.lua. Your 2 finished triggers should look like this:
 
-trigger -> ONCE -> TIME MORE 1 -> DO SCRIPT FILE mist.lua
+trigger -> Mission Start -> **no condition** -> DO SCRIPT FILE moose.lua
 
-trigger -> ONCE -> TIME MORE 5 -> DO SCRIPT FILE EWRS.lua
+trigger -> ONCE -> TIME MORE 2 -> DO SCRIPT FILE EWRS.lua
 
-The time more values are not that important, but just remember to load MIST first, and give it a couple of seconds before loading another script to ensure its fully loaded first.
+The time more values are not that important, but just remember to load MOOSE first, and give it a couple of seconds before loading another script to ensure its fully loaded first.
 
 ###### NOTE
 Any branch outside of 'master' have not been tested ingame yet and should be considered unstable
